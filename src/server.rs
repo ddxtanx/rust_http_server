@@ -74,7 +74,9 @@ impl<'a> Server<'a> {
                 }
             }
             None => {
-                response.write_to_stream(stream)?;
+                let resp_404 =
+                    HttpResponse::new(404, Map::new(), None, "404 Not Found".as_bytes().to_vec());
+                resp_404.write_to_stream(stream)?;
             }
         }
 
