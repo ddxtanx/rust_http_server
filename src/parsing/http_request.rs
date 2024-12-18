@@ -1,4 +1,6 @@
-use std::collections::HashMap as Map;
+use std::{collections::HashMap as Map, str::FromStr};
+
+use json::{json::JSON, parsing::JSONError};
 
 use crate::parsing::HttpMethod;
 
@@ -9,6 +11,11 @@ pub struct HttpRequest {
     query: Map<String, String>,
     headers: Map<String, String>,
     body: Option<Vec<u8>>,
+}
+
+pub enum RequestError {
+    InvalidContentType,
+    JSONError(JSONError),
 }
 
 impl HttpRequest {
@@ -45,6 +52,33 @@ impl HttpRequest {
             query,
             headers,
             body,
+        }
+    }
+
+    pub fn json(&self) -> Result<JSON, RequestError> {
+        let content_type = self.headers.get("Content-Type");
+        if content_type == Some(&"application/json".to_string()) {
+            let body_str = String::from_utf8_lossy(self.body.as_ref().unwrap());
+            Ok(JSON::from_str(&body_str).map_err(RequestError::JSONError)?)
+        } else {
+            Err(RequestError::InvalidContentType)
+        }
+    }
+
+    pub fn form(&self) -> Result<Map<String, String>, RequestError> {
+        let content_type = self.headers.get("Content-Type");
+        if content_type == Some(&"application/x-www-form-urlencoded".to_string()) {
+            let body_str = String::from_utf8_lossy(self.body.as_ref().unwrap());
+            let mut form = Map::new();
+            for pair in body_str.split('&') {
+                let mut parts = pair.split('=');
+                let key = parts.next().unwrap();
+                let value = parts.next().unwrap();
+                form.insert(key.to_string(), value.to_string());
+            }
+            Ok(form)
+        } else {
+            Err(RequestError::InvalidContentType)
         }
     }
 }

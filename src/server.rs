@@ -1,9 +1,8 @@
-use crate::helpers::path_to_mimetype;
 use crate::parsing::http_request::HttpRequest;
 use crate::parsing::http_response::HttpResponse;
 use crate::parsing::request_parser::RequestParser;
 use std::collections::HashMap as Map;
-use std::io::{Read, Result};
+use std::io::Result;
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 
 pub struct Server<'a> {
@@ -38,6 +37,8 @@ impl<'a> Server<'a> {
         if path_str.ends_with('/') {
             path_str.push_str("index.html");
         }
+
+        path_str = format!("{}/{}", folder, path_str);
 
         let mut resp = HttpResponse::new(200, Map::new(), None, Vec::new());
         let read_result = HttpResponse::write_from_file(&mut resp, path_str.as_str());

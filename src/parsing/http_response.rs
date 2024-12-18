@@ -1,5 +1,5 @@
 use crate::helpers::path_to_mimetype;
-use json::JSON;
+use json::json::JSON;
 use std::collections::HashMap as Map;
 use std::io::{Read, Write};
 use std::net::TcpStream;

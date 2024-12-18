@@ -12,4 +12,4 @@ dependencies = [
 [[package]]
 name = "json"
 version = "0.1.0"
-source = "git+https://github.com/ddxtanx/rust-json#1f949738f42551fad6fc713ebc07a103e6946bd5"
+source = "git+https://github.com/ddxtanx/rust-json#bccc184e20543a706e86966573429fd2f37fcae2"
