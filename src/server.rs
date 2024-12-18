@@ -2,17 +2,20 @@ use crate::parsing::http_request::HttpRequest;
 use crate::parsing::http_response::HttpResponse;
 use crate::parsing::request_parser::RequestParser;
 use std::collections::HashMap as Map;
-use std::io::Result;
+use std::io;
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 
 pub struct Server<'a> {
     socket: TcpListener,
-    handlers: Map<String, Box<dyn Fn(&HttpRequest, &mut HttpResponse) + 'a>>,
+    handlers: Map<
+        String,
+        Box<dyn 'a + Fn(&HttpRequest, &mut HttpResponse) -> Result<(), HttpResponse<'a>>>,
+    >,
     static_asset_folder: Option<&'static str>,
 }
 
 impl<'a> Server<'a> {
-    pub fn new<A: ToSocketAddrs>(addr: A) -> Result<Self> {
+    pub fn new<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
         let socket = TcpListener::bind(addr)?;
         Ok(Server {
             socket,
@@ -25,7 +28,7 @@ impl<'a> Server<'a> {
         self.static_asset_folder = Some(folder);
     }
 
-    fn handle_static(&self, stream: &mut TcpStream, request: &HttpRequest) -> Result<bool> {
+    fn handle_static(&self, stream: &mut TcpStream, request: &HttpRequest) -> io::Result<bool> {
         if self.static_asset_folder.is_none() {
             return Ok(false);
         }
@@ -49,7 +52,7 @@ impl<'a> Server<'a> {
         Ok(true)
     }
 
-    fn handle_request(&self, stream: &mut TcpStream, request: &HttpRequest) -> Result<()> {
+    fn handle_request(&self, stream: &mut TcpStream, request: &HttpRequest) -> io::Result<()> {
         let was_static = self.handle_static(stream, request)?;
         if was_static {
             return Ok(());
@@ -60,8 +63,15 @@ impl<'a> Server<'a> {
         let mut response = HttpResponse::new(0, Map::new(), None, Vec::new());
         match handler {
             Some(handler) => {
-                handler(request, &mut response);
-                response.write_to_stream(stream)?;
+                let err_resp = handler(request, &mut response);
+                match err_resp {
+                    Ok(_) => {
+                        response.write_to_stream(stream)?;
+                    }
+                    Err(err) => {
+                        err.write_to_stream(stream)?;
+                    }
+                }
             }
             None => {
                 response.write_to_stream(stream)?;
@@ -71,7 +81,7 @@ impl<'a> Server<'a> {
         Ok(())
     }
 
-    pub fn run(&mut self) -> Result<()> {
+    pub fn run(&mut self) -> io::Result<()> {
         for stream in self.socket.incoming() {
             let mut stream = stream?;
             let mut parser = RequestParser::new(&mut stream);
@@ -89,7 +99,7 @@ impl<'a> Server<'a> {
 
     pub fn add_handler<F>(&mut self, path: &str, handler: F)
     where
-        F: Fn(&HttpRequest, &mut HttpResponse) + 'a,
+        F: Fn(&HttpRequest, &mut HttpResponse) -> Result<(), HttpResponse<'a>> + 'a,
     {
         self.handlers.insert(path.to_string(), Box::new(handler));
     }

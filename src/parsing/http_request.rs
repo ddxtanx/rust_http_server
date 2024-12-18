@@ -4,6 +4,8 @@ use json::{json::JSON, parsing::JSONError};
 
 use crate::parsing::HttpMethod;
 
+use super::http_response::HttpResponse;
+
 #[derive(Debug)]
 pub struct HttpRequest {
     method: HttpMethod,
@@ -16,6 +18,25 @@ pub struct HttpRequest {
 pub enum RequestError {
     InvalidContentType,
     JSONError(JSONError),
+}
+
+impl<'a> From<RequestError> for HttpResponse<'a> {
+    fn from(err: RequestError) -> HttpResponse<'a> {
+        match err {
+            RequestError::InvalidContentType => HttpResponse::new(
+                400,
+                Map::new(),
+                None,
+                "Invalid Content-Type".to_string().into_bytes(),
+            ),
+            RequestError::JSONError(err) => HttpResponse::new(
+                400,
+                Map::new(),
+                None,
+                format!("JSON Error: {}", err).into_bytes(),
+            ),
+        }
+    }
 }
 
 impl HttpRequest {
