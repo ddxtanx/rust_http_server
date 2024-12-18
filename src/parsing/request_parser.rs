@@ -46,11 +46,15 @@ impl<'a> RequestParser<'a> {
         if self.buf.capacity() == 0 {
             self.buf.resize(1024, 0);
         }
-        let mut line_iter = BufReader::new(&mut self.stream).lines();
-        let first_line = line_iter
-            .next()
-            .ok_or(ParseError::GenericError)?
-            .map_err(|err| ParseError::StreamError(Box::new(err)))?;
+        let mut buf = BufReader::new(&mut self.stream);
+        let mut first_line = String::new();
+        buf.read_line(&mut first_line).map_err(|err| {
+            if err.kind() == std::io::ErrorKind::UnexpectedEof {
+                ParseError::MalformedRequest
+            } else {
+                ParseError::StreamError(Box::new(err))
+            }
+        })?;
         let mut parts = first_line.split_whitespace();
         let method_str = parts.next().ok_or(ParseError::MalformedRequest)?;
         let method = match method_str {
@@ -84,11 +88,15 @@ impl<'a> RequestParser<'a> {
         }
         let mut headers = Map::new();
         loop {
-            let line = line_iter
-                .next()
-                .ok_or(ParseError::MalformedRequest)?
-                .map_err(|err| ParseError::StreamError(Box::new(err)))?;
-            if line.is_empty() {
+            let mut line = String::new();
+            buf.read_line(&mut line).map_err(|err| {
+                if err.kind() == std::io::ErrorKind::UnexpectedEof {
+                    ParseError::MalformedRequest
+                } else {
+                    ParseError::StreamError(Box::new(err))
+                }
+            })?;
+            if line.trim().is_empty() {
                 break;
             }
             let mut parts = line.splitn(2, ':');
@@ -98,7 +106,7 @@ impl<'a> RequestParser<'a> {
             headers.insert(key.to_string(), value.to_string());
         }
 
-        let content_length = headers
+        let mut content_length = headers
             .get("Content-Length")
             .map(|value| value.parse::<usize>().unwrap_or(0))
             .unwrap_or(0);
@@ -108,22 +116,14 @@ impl<'a> RequestParser<'a> {
         }
 
         let mut body = vec![0; content_length];
-        let bytes_read = self
-            .stream
-            .read(&mut body)
-            .map_err(|err| ParseError::StreamError(Box::new(err)))?;
-        if bytes_read < content_length {
-            return Err(ParseError::ContentTooSmall);
-        }
-        let dummy_buffer = &mut [0; 1];
-        let new_bytes_read = self
-            .stream
-            .read(dummy_buffer)
-            .map_err(|err| ParseError::StreamError(Box::new(err)))?;
-        if new_bytes_read > 0 {
-            return Err(ParseError::ContentTooLarge);
-        }
 
+        buf.read_exact(&mut body).map_err(|err| {
+            if err.kind() == std::io::ErrorKind::UnexpectedEof {
+                ParseError::ContentTooSmall
+            } else {
+                ParseError::StreamError(Box::new(err))
+            }
+        })?;
         Ok(HttpRequest::new(method, path, query, headers, Some(body)))
     }
 }

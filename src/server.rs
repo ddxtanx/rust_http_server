@@ -94,7 +94,6 @@ impl<'a> Server<'a> {
             }
             let request = request.unwrap();
             self.handle_request(&mut stream, &request)?;
-            println!("Connection established!");
         }
         Ok(())
     }

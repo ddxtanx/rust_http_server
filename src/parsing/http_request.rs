@@ -23,18 +23,18 @@ pub enum RequestError {
 impl<'a> From<RequestError> for HttpResponse<'a> {
     fn from(err: RequestError) -> HttpResponse<'a> {
         match err {
-            RequestError::InvalidContentType => HttpResponse::new(
-                400,
-                Map::new(),
-                None,
-                "Invalid Content-Type".to_string().into_bytes(),
-            ),
-            RequestError::JSONError(err) => HttpResponse::new(
-                400,
-                Map::new(),
-                None,
-                format!("JSON Error: {}", err).into_bytes(),
-            ),
+            RequestError::InvalidContentType => {
+                let mut resp = HttpResponse::new(400, Map::new(), None, Vec::new());
+                HttpResponse::write_from_string(&mut resp, "Invalid Content-Type");
+                resp.set_status(400);
+                resp
+            }
+            RequestError::JSONError(json_err) => {
+                let mut resp = HttpResponse::new(400, Map::new(), None, Vec::new());
+                HttpResponse::write_from_string(&mut resp, &format!("JSON Error: {}", json_err));
+                resp.set_status(400);
+                resp
+            }
         }
     }
 }
