@@ -1,3 +1,4 @@
+use crate::helpers::path_to_mimetype;
 use crate::parsing::http_request::HttpRequest;
 use crate::parsing::http_response::HttpResponse;
 use crate::parsing::request_parser::RequestParser;
@@ -38,19 +39,12 @@ impl<'a> Server<'a> {
             path_str.push_str("index.html");
         }
 
-        let static_path = format!("{}{}", folder, path_str);
-        let os_path = std::path::Path::new(&static_path);
-        if !os_path.exists() {
+        let mut resp = HttpResponse::new(200, Map::new(), None, Vec::new());
+        let read_result = HttpResponse::write_from_file(&mut resp, path_str.as_str());
+        if read_result.is_err() {
             return Ok(false);
         }
-
-        let mut file = std::fs::File::open(os_path)?;
-        let size = file.metadata()?.len() as usize;
-        let mut buffer = vec![0; size];
-        file.read_exact(&mut buffer)?;
-
-        let response = HttpResponse::new(200, Map::new(), buffer);
-        response.write_to_stream(stream)?;
+        resp.write_to_stream(stream)?;
         Ok(true)
     }
 
@@ -62,7 +56,7 @@ impl<'a> Server<'a> {
 
         let path = request.get_path();
         let handler = self.handlers.get(path);
-        let mut response = HttpResponse::new(0, Map::new(), Vec::new());
+        let mut response = HttpResponse::new(0, Map::new(), None, Vec::new());
         match handler {
             Some(handler) => {
                 handler(request, &mut response);
